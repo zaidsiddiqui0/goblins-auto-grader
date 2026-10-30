@@ -26,7 +26,8 @@ export class Worker {
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
-    this.reapExpired();
+    // Single-process: anything 'processing' at boot was orphaned by a crash. Requeue it now.
+    this.reapExpired(Number.MAX_SAFE_INTEGER);
     this.poll();
     this.pollTimer = setInterval(() => this.poll(), 250);
     this.reaperTimer = setInterval(() => this.reapExpired(), 10_000);
@@ -129,12 +130,12 @@ export class Worker {
     }
   }
 
-  private reapExpired(): void {
+  private reapExpired(cutoff = Date.now()): void {
     const timestamp = Date.now();
     const result = db.prepare(`
       UPDATE submissions SET status='queued', next_run_at=?, lease_until=NULL, updated_at=?
       WHERE status='processing' AND lease_until IS NOT NULL AND lease_until<=?
-    `).run(timestamp, now(), timestamp);
+    `).run(timestamp, now(), cutoff);
     this.retries += Number(result.changes);
   }
 }
