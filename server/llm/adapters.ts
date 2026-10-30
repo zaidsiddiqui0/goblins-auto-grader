@@ -215,9 +215,9 @@ export class OpenRouterGrader implements Grader {
     return callJson("grader", this.model, [
       {
         role: "system",
-        content: `You grade student work against the supplied approved rubric. ${DATA_WARNING} Grade only the transcribed work, award each listed criterion independently, and allow alternatives and partial credit described by the rubric. Do not calculate or return a total. Return JSON exactly in this shape: {"questions":[{"questionId":"string","criteria":[{"criterionId":"string","awarded":0,"rationale":"string"}],"feedback":"string","needsReview":false,"reviewReason":"string|null"}],"overallFeedback":"string"}. Include every rubric question and criterion, with no additional ids.`,
+        content: `You grade student work against the supplied approved rubric. ${DATA_WARNING} The teacher has approved this rubric, so treat it as authoritative. Grade only the transcribed work, award each listed criterion independently, and allow alternatives and partial credit described by the rubric. Do not calculate or return a total. Keep it brief: rationale ≤15 words, feedback ≤2 short student-friendly sentences, overallFeedback ≤2 sentences. Set needsReview=true only when the student's work is ambiguous, illegible, or uncertainly transcribed, or when the rubric doesn't cover the student's approach. Return JSON exactly in this shape: {"questions":[{"questionId":"string","criteria":[{"criterionId":"string","awarded":0,"rationale":"string"}],"feedback":"string","needsReview":false,"reviewReason":"string|null"}],"overallFeedback":"string"}. Include every rubric question and criterion, with no additional ids.`,
       },
-      { role: "user", content: `<assignment>${JSON.stringify({ rubric })}</assignment><student_work>${JSON.stringify(transcription)}</student_work>` },
+      { role: "user", content: `<assignment>${JSON.stringify({ rubric: { questions: rubric.questions.map(({ needsReview: _n, reviewNotes: _r, ...q }) => q) } })}</assignment><student_work>${JSON.stringify(transcription)}</student_work>` },
     ], GraderOutput);
   }
 }
