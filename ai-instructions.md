@@ -31,9 +31,10 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - [x] Scaffold, contracts, and docs
 - [x] Backend (Kimi A)
 - [x] Frontend (Kimi B)
-- [ ] Integration and real-model smoke run
+- [x] Integration and real-model smoke run
 - [x] Load test, Dockerfile, README, and results (Kimi C)
-- [ ] Final verification and handoff
+- [x] UI walkthrough in headless Chrome; screenshots in docs/screens/
+- [ ] Public deploy (Fly.io; needs user's account) and push to GitHub (remote has an unrelated 'first commit' in ~/Documents copy, so confirm before pushing)
 
 ## History
 - Session 1 (Opus 5.5 orchestrator): found the repo empty with no Goblins APIs, so built from scratch with adapters. Chose the single-process Hono + SQLite + in-process DB queue. Wrote the plan, the contracts, and this file. Spend at start: $0.16 on the key.
@@ -41,3 +42,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Session 3 (Kimi A): implemented SQLite, all API routes, uploads/auth, Effect OpenRouter and mock adapters, code-side scoring, and the leased retry worker; typecheck, 8 tests with `--root .`, and full mock curl flow passed (plain `npm test` still needs Vitest root config outside `server/`).
 - Orchestrator: integrated A+B. Fixed the vitest root. Mock E2E passed (409 before approval, idempotent replay, token 404s, magic-byte check). Real smoke on Haiku 5.5: 8 calls, $0.006 total. Handwriting photo read correctly, grades 17/18 and 0/18 as expected. Fixed the grader so it no longer inherits the rubric draft's needsReview flags and capped output verbosity (about -30% tokens). Gotcha: kill the node PID, not the npm PID.
 - Session 4 (Kimi C): added the seeded HTTP load-test harness with idempotency/integrity checks and JSON reports, Dockerfile/.dockerignore, README, and measured mock results. Typecheck, build, and 8 tests passed. Required runs passed: n=5 at 9.597 completed/s, E2E p95 520ms; n=30/concurrency=10 at 23.112/s, E2E p95 1271ms, peak in-flight 8, queue 10. Burst/failure/real load tests remain for orchestrator. Docker CLI unavailable, so image build was not run.
+- Orchestrator: the crash test found that orphaned `processing` jobs waited for lease expiry; boot now requeues all of them. Fixed the review-list numbering in the approve dialog. Local deploy: `node --env-file=.env --import tsx server/index.ts` on :3000, LLM_MODE=real, data in ./data. Browser automation: the user's Chrome has no remote debugging, so launch headless Chrome with --remote-debugging-port=9333 and its own --user-data-dir, and set BU_CDP_WS plus BH_HOME=/tmp/bh-gag (~/.config is root-owned).

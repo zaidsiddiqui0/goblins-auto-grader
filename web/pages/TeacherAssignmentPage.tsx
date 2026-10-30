@@ -141,7 +141,7 @@ export function TeacherAssignmentPage() {
   const draft = assignment.draftRubric;
   const editorVersion = draft?.version ?? (current?.version ?? 0) + 1;
   const shareLink = `${window.location.origin}/s/${assignment.accessCode}`;
-  const reviewQuestions = editedRubric?.questions.filter((question) => question.needsReview) ?? [];
+  const reviewQuestions = editedRubric?.questions.map((question, i) => ({ ...question, number: i + 1 })).filter((question) => question.needsReview) ?? [];
 
   return (
     <div className="teacher-page">
@@ -229,7 +229,7 @@ export function TeacherAssignmentPage() {
           <section className="modal card" role="dialog" aria-modal="true" aria-labelledby="approve-title">
             <h2 id="approve-title">Lock rubric v{editorVersion}?</h2>
             <p>Submissions will be graded with this version.</p>
-            {reviewQuestions.length > 0 && <Notice tone="warning"><strong>Still marked for review:</strong><ul>{reviewQuestions.map((question, index) => <li key={question.questionId}>Question {index + 1}: {question.reviewNotes || question.prompt}</li>)}</ul></Notice>}
+            {reviewQuestions.length > 0 && <Notice tone="warning"><strong>Still marked for review:</strong><ul>{reviewQuestions.map((question) => <li key={question.questionId}>Question {question.number}: {question.reviewNotes || question.prompt}</li>)}</ul></Notice>}
             <p className="muted">An approved rubric is immutable. Further edits create a new version.</p>
             <div className="button-group modal-actions"><button type="button" className="button secondary" onClick={() => setConfirming(false)} disabled={busy !== null}>Keep editing</button><button type="button" className="button primary" onClick={() => void approve()} disabled={busy !== null}>{busy === "approve" ? "Publishing…" : "Lock & publish"}</button></div>
           </section>
