@@ -1,0 +1,10 @@
+node_modules
+dist
+data
+loadtest-results
+.git
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

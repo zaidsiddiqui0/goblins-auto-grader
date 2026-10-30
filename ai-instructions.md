@@ -32,7 +32,7 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - [x] Backend (Kimi A)
 - [x] Frontend (Kimi B)
 - [ ] Integration and real-model smoke run
-- [ ] Load test, Dockerfile, README, and results (Kimi C)
+- [x] Load test, Dockerfile, README, and results (Kimi C)
 - [ ] Final verification and handoff
 
 ## History
@@ -40,3 +40,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Session 2 (Kimi B): built the complete responsive React SPA and typed API/token/upload helpers; frontend typecheck, production build, and mock-mode dev smoke passed.
 - Session 3 (Kimi A): implemented SQLite, all API routes, uploads/auth, Effect OpenRouter and mock adapters, code-side scoring, and the leased retry worker; typecheck, 8 tests with `--root .`, and full mock curl flow passed (plain `npm test` still needs Vitest root config outside `server/`).
 - Orchestrator: integrated A+B. Fixed the vitest root. Mock E2E passed (409 before approval, idempotent replay, token 404s, magic-byte check). Real smoke on Haiku 5.5: 8 calls, $0.006 total. Handwriting photo read correctly, grades 17/18 and 0/18 as expected. Fixed the grader so it no longer inherits the rubric draft's needsReview flags and capped output verbosity (about -30% tokens). Gotcha: kill the node PID, not the npm PID.
+- Session 4 (Kimi C): added the seeded HTTP load-test harness with idempotency/integrity checks and JSON reports, Dockerfile/.dockerignore, README, and measured mock results. Typecheck, build, and 8 tests passed. Required runs passed: n=5 at 9.597 completed/s, E2E p95 520ms; n=30/concurrency=10 at 23.112/s, E2E p95 1271ms, peak in-flight 8, queue 10. Burst/failure/real load tests remain for orchestrator. Docker CLI unavailable, so image build was not run.
