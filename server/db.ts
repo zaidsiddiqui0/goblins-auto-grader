@@ -1,5 +1,6 @@
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import { promisify } from "node:util";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
@@ -197,15 +198,18 @@ export function tokenMatches(token: string | undefined, hashHex: string): boolea
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export function hashPin(pin: string): string {
+const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
+
+export async function hashPin(pin: string): Promise<string> {
   const salt = randomBytes(16);
-  return `${salt.toString("hex")}:${scryptSync(pin, salt, 32).toString("hex")}`;
+  const hash = await scryptAsync(pin, salt, 32);
+  return `${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
-export function pinMatches(pin: string, stored: string): boolean {
+export async function pinMatches(pin: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(":");
   if (!saltHex || !hashHex) return false;
-  const actual = scryptSync(pin, Buffer.from(saltHex, "hex"), 32);
+  const actual = await scryptAsync(pin, Buffer.from(saltHex, "hex"), 32);
   const expected = Buffer.from(hashHex, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

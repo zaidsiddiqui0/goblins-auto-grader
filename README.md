@@ -87,7 +87,9 @@ npm run loadtest -- --n 30 --max-p95-s 60
 npm run loadtest -- --real --n 3 --max-p95-s 60
 ```
 
-JSON reports include per-submission accept/end-to-end latency, aggregate percentiles, throughput, queue peaks, retries, integrity checks, and LLM cost delta. See [load-test methodology](docs/LOADTEST.md).
+JSON reports include per-submission accept/end-to-end latency, aggregate percentiles, throughput, queue peaks, retries, integrity checks, and LLM cost delta.
+See [load-test confidence, results, and ship rule](docs/LOADTEST.md); the same page holds the accuracy table and the **Built for setup → at scale** plan.
+It covers database, queue, server, uploads, score updates, PIN checks, model calls, backups, and monitoring, with the limit each change removes.
 
 ## Accuracy eval
 

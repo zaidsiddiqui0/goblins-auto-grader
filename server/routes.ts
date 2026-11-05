@@ -74,34 +74,43 @@ class JoinError extends Error {
   constructor(message: string, readonly status: 401 | 423, readonly retryAfter = 0) { super(message); }
 }
 
-function join(assignment: AssignmentRow, name: string, pin: string): { token: string; student: StudentRow } | { error: JoinError } {
-  return transaction(() => {
-    const timestamp = Date.now();
+type JoinResult = { token: string; student: StudentRow } | { error: JoinError };
+
+async function join(assignment: AssignmentRow, name: string, pin: string): Promise<JoinResult> {
+  for (;;) {
     const existing = db.prepare("SELECT * FROM students WHERE assignment_id=? AND lower(name)=lower(?)").get(assignment.id, name) as unknown as StudentRow | undefined;
-    if (!existing) {
-      const studentId = newId();
+    const pinHash = existing ? null : await hashPin(pin);
+    const validPin = existing ? await pinMatches(pin, existing.pin_hash) : false;
+    const result = transaction<JoinResult | null>(() => {
+      const timestamp = Date.now();
+      const current = db.prepare("SELECT * FROM students WHERE assignment_id=? AND lower(name)=lower(?)").get(assignment.id, name) as unknown as StudentRow | undefined;
+      if (current?.pin_hash !== existing?.pin_hash) return null;
+      if (!current) {
+        const studentId = newId();
+        const token = newToken();
+        db.prepare("INSERT INTO students (id, assignment_id, name, pin_hash, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(studentId, assignment.id, name, pinHash!, hashToken(token).toString("hex"), now());
+        return { token, student: getStudent(studentId)! };
+      }
+      if (current.locked_until !== null && current.locked_until > timestamp) {
+        return { error: new JoinError("Too many incorrect PINs. Try again in 10 minutes.", 423, Math.ceil((current.locked_until - timestamp) / 1000)) };
+      }
+      const priorAttempts = current.locked_until !== null ? 0 : current.wrong_pin_attempts;
+      if (!validPin) {
+        const attempts = priorAttempts + 1;
+        const lockedUntil = attempts >= 5 ? timestamp + 10 * 60 * 1000 : null;
+        db.prepare("UPDATE students SET wrong_pin_attempts=?, locked_until=? WHERE id=?")
+          .run(lockedUntil === null ? attempts : 0, lockedUntil, current.id);
+        if (lockedUntil !== null) return { error: new JoinError("Too many incorrect PINs. Try again in 10 minutes.", 423, 600) };
+        return { error: new JoinError("Incorrect PIN.", 401) };
+      }
       const token = newToken();
-      db.prepare("INSERT INTO students (id, assignment_id, name, pin_hash, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(studentId, assignment.id, name, hashPin(pin), hashToken(token).toString("hex"), now());
-      return { token, student: getStudent(studentId)! };
-    }
-    if (existing.locked_until !== null && existing.locked_until > timestamp) {
-      return { error: new JoinError("Too many incorrect PINs. Try again in 10 minutes.", 423, Math.ceil((existing.locked_until - timestamp) / 1000)) };
-    }
-    const priorAttempts = existing.locked_until !== null ? 0 : existing.wrong_pin_attempts;
-    if (!pinMatches(pin, existing.pin_hash)) {
-      const attempts = priorAttempts + 1;
-      const lockedUntil = attempts >= 5 ? timestamp + 10 * 60 * 1000 : null;
-      db.prepare("UPDATE students SET wrong_pin_attempts=?, locked_until=? WHERE id=?")
-        .run(lockedUntil === null ? attempts : 0, lockedUntil, existing.id);
-      if (lockedUntil !== null) return { error: new JoinError("Too many incorrect PINs. Try again in 10 minutes.", 423, 600) };
-      return { error: new JoinError("Incorrect PIN.", 401) };
-    }
-    const token = newToken();
-    db.prepare("UPDATE students SET token_hash=?, wrong_pin_attempts=0, locked_until=NULL WHERE id=?")
-      .run(hashToken(token).toString("hex"), existing.id);
-    return { token, student: getStudent(existing.id)! };
-  });
+      db.prepare("UPDATE students SET token_hash=?, wrong_pin_attempts=0, locked_until=NULL WHERE id=?")
+        .run(hashToken(token).toString("hex"), current.id);
+      return { token, student: getStudent(current.id)! };
+    });
+    if (result) return result;
+  }
 }
 
 export type AppWorker = { notify(): void; metrics(): { inFlight: number; peakInFlight: number; retries: number } };
@@ -274,7 +283,7 @@ export function createApp(worker: AppWorker): Hono {
     const parsed = JoinBody.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: "Name and a 4-digit PIN are required" }, 400);
     try {
-      const joined = join(assignment, parsed.data.name, parsed.data.pin);
+      const joined = await join(assignment, parsed.data.name, parsed.data.pin);
       if ("error" in joined) {
         if (joined.error.retryAfter) c.header("Retry-After", String(joined.error.retryAfter));
         return c.json({ error: joined.error.message }, joined.error.status);
