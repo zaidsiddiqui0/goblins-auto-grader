@@ -1,3 +1,5 @@
+**Live app:** https://app-production-1a4f.up.railway.app
+
 # Goblins Auto-Grader
 
 A small, deployable auto-grader for K-12 assignments. A teacher locks a rubric before students join; students show their work one question at a time on a whiteboard, by typing, or with a photo.
@@ -99,16 +101,18 @@ LLM_MODE=real npm run eval -- \
 
 It refuses to run unless `LLM_MODE=real` and writes detailed JSON to `loadtest-results/`. No accuracy results are claimed until that command is run explicitly.
 
-## Deploy to Fly.io
+## Deploy (Railway)
 
-**Not yet deployed.**
+**Live:** https://app-production-1a4f.up.railway.app (real model, `LLM_BUDGET_USD=3` guard). The load-test twin is https://loadtest-production-1aeb.up.railway.app (mock).
 
 ```sh
-fly launch --no-deploy
-fly volumes create goblins_data --size 1
-printf '\n[mounts]\n  source = "goblins_data"\n  destination = "/data"\n' >> fly.toml
-fly secrets set LLM_MODE=real OPENROUTER_API_KEY='your-key' LLM_BUDGET_USD=2
-fly deploy
+npx -y @railway/cli login
+npx -y @railway/cli init -n goblins-auto-grader
+npx -y @railway/cli add --service app
+npx -y @railway/cli volume add -m /data
+npx -y @railway/cli variables -s app --set LLM_MODE=real --set DATA_DIR=/data --set WORKER_CONCURRENCY=48
+printf %s "$OPENROUTER_API_KEY" | npx -y @railway/cli variables -s app --set-from-stdin OPENROUTER_API_KEY
+npx -y @railway/cli up -s app && npx -y @railway/cli domain -s app
 ```
 
 ## More documentation

@@ -36,7 +36,9 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - [x] UI walkthrough in headless Chrome; screenshots in docs/screens/
 - [x] Original-brief gaps: per-question flow, whiteboard, cross-device persistence, report grid, CTAs, load test, and accuracy eval
 - [x] Pushed `main` to GitHub; Karavil invited (write, pending acceptance)
-- [ ] Public deploy (Fly.io; needs user's account)
+- [x] Pushed to GitHub. Deployed on Railway: app https://app-production-1a4f.up.railway.app (real, $3 budget guard), loadtest twin https://loadtest-production-1aeb.up.railway.app (mock). CLI: `npx -y @railway/cli`, project goblins-auto-grader, services app + loadtest, volumes at /data.
+- [ ] Invite Karavil ONLY when the user says so: `gh api -X PUT repos/zaidsiddiqui0/goblins-auto-grader/collaborators/Karavil`. gh is NOT logged in; git push works via the keychain.
+- [ ] Optional demo recording script
 
 ## History
 - Session 1 (Opus 5.5 orchestrator): found the repo empty with no Goblins APIs, so built from scratch with adapters. Chose the single-process Hono + SQLite + in-process DB queue. Wrote the plan, the contracts, and this file. Spend at start: $0.16 on the key.
@@ -49,3 +51,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Session 5 (Kimi D): replaced whole-assignment submissions with PIN-joined students and natural-key per-question jobs pinned to rubric slices; added the responsive whiteboard, teacher fragment links, student summary, report grid, and Goblins CTAs. Updated load testing and added a 15-answer/3-question real-model eval (not run). Added rubric-version and inline-PDF integration coverage. Typecheck, 11 tests, build, and the required n=30 mock smoke passed: 90/90 completed, 3/3 duplicate replays matched, zero lost/duplicated/stuck, E2E p95 604ms; results in `loadtest-results/2026-11-05T07-32-43-313Z-mock-n30.json`. No git commit made.
 - Session 6: installed `gh`, logged in as zaidsiddiqui0, pushed `main` (public repo), and invited Karavil as a collaborator. Personal repos can't grant read-only access, so the invite is write.
 - v2 verified: whiteboard grading worked in the browser, PIN rejoin worked, accuracy eval run (Haiku 93%), and the 300-student per-question spike passed (16 workers p95 43s; 96 workers p95 6.5s). Harness fix: retry transient fetch errors. Deploy target is Railway (the user chose it). The CLI runs via `npx -y @railway/cli` because brew needs an Xcode update. gh is installed; logins were pending on the user's device codes. Prod should set WORKER_CONCURRENCY around 48.
+- Deployed. Deployed spike results are in LOADTEST.md: 300 students pass, and about 1000 simultaneous students break HTTP (502s) on one container. Gotcha: use a quoted heredoc ('EOF') when the text contains backticks.

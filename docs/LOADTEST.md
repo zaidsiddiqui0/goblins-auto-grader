@@ -1,5 +1,12 @@
 # Load test
 
+## Statement of confidence (deployed, Railway, one container)
+
+- **Ship for classroom-scale spikes.** On the deployed stack, 300 students joining at once and working through 3 questions had 900/900 graded, 0 lost, 0 duplicated, 0 stuck, and a per-answer p95 of 8.6s. A real-model run on production had 30/30 graded, p95 1.8s, $0.005.
+- **It breaks at about 1,000 simultaneous students per container.** 18 joins returned HTTP 502 from Railway's proxy, and HTTP accept p99 was 27.8s. 54 of 3000 answers were never accepted. The client saw an error each time, so nothing was silent, and every accepted answer still completed (2946/2946). The bottleneck is one Node process doing HTTP, polling, and SQLite writes. It is not the grading queue.
+- **Re-run any time, for free:** `npm run loadtest -- --base https://loadtest-production-1aeb.up.railway.app --n 300 --concurrency 300 --think-ms 3000 --max-p95-s 10` (a mock-mode twin of production). Exit 0 means ship.
+
+
 `scripts/loadtest.ts` exercises the production HTTP path. It creates and approves a three-question assignment; every seeded student joins with a name and PIN, then submits each question sequentially and waits for its terminal grade. Think-time between questions defaults to 2000ms with a deterministic ±50% jitter. Bounded student concurrency and optional start staggering model a testing-day window rather than an artificial all-at-once burst.
 
 The harness replays question 1 for a seeded subset of students. The natural `(student_id, question_id)` key must return the same submission. It samples `/api/metrics` every 500ms and uses the teacher report for authoritative lost, duplicated, nonterminal, and unscored checks. The JSON report includes every submission's accept and terminal latency as well as aggregate percentiles.
@@ -56,3 +63,16 @@ All integrity checks passed. Throughput includes student think-time; per-submiss
 | openai/gpt-5-mini | 86.7% | 0.13 | $0.0248 | 7.8s |
 
 Caveat: the labels were written by the coding agent and haven't been checked by a teacher, and n=15. Treat this as a smoke test of accuracy, not proof.
+
+## Deployed runs (Railway, 2026-11-05; client = M1 Mac over the internet)
+
+| Target | Run | Graded | Lost / dup / stuck | Accept p95 / p99 | Per-answer p50 / p95 / p99 | Peak queue | Cost |
+|---|---|---|---|---|---|---|---|
+| loadtest (mock, 96 workers) | 30 students × 3 q | 90/90 | 0/0/0 | 0.12s / 0.39s | 2.6s / 3.7s / 3.8s | 0 | $0 |
+| loadtest (mock, 96 workers) | 300 students × 3 q, all at once | 900/900 | 0/0/0 | 2.1s / 8.8s | 4.0s / 8.6s / 13.4s | 93 | $0 |
+| loadtest (mock, 96 workers) | 1000 students × 3 q, all at once | 2946/3000 accepted, 2946 graded | 0/0/0 | 8.1s / 27.8s | 15.2s / 23.3s / 41.5s | 746 | $0 |
+| **app (real Haiku 5.5)** | 10 students × 3 q | 30/30 | 0/0/0 | – | 1.4s / 1.8s / 2.1s | 0 | **$0.0048** |
+
+The app is at https://app-production-1a4f.up.railway.app. The mock twin is at https://loadtest-production-1aeb.up.railway.app (same image; `LLM_MODE=mock`, `MOCK_LATENCY_MS=2500`).
+
+**Next fixes, in order:** (1) replace 1s polling with SSE or longer poll intervals (polling was most of the request load), (2) split the API and the workers into separate services, (3) Postgres plus a SKIP LOCKED queue so API replicas can scale horizontally. Those come before the 10k row in the scaling table.
