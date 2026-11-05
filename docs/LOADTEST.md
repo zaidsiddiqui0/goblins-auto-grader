@@ -56,13 +56,15 @@ All integrity checks passed. Throughput includes student think-time; per-submiss
 
 ## Accuracy eval (real models, `scripts/eval.ts`, 15 labeled typed answers)
 
+Labels were human-checked on 2026-11-05. Two scores were changed (q2-b 4→3, q2-e 2→1), and the q2 rubric was tightened to match: the rule must be stated, and units must be cm². Run `LLM_MODE=real npm run eval -- --model M`.
+
 | Model | Exact match | MAE (pts) | Cost per 15 | p50 |
 |---|---|---|---|---|
-| anthropic/claude-haiku-5.5 (default) | 93.3% | 0.07 | $0.0043 | 2.2s |
-| google/gemini-2.5-flash-lite | 80.0% | 0.20 | $0.0016 | 0.8s |
-| openai/gpt-5-mini | 86.7% | 0.13 | $0.0248 | 7.8s |
+| anthropic/claude-haiku-5.5 (default) | 86.7% | 0.13 | $0.0043 | 2.0s |
+| google/gemini-2.5-flash-lite | 86.7% | 0.13 | $0.0017 | 0.9s |
+| openai/gpt-5-mini | 93.3% | 0.07 | $0.0268 | 9.2s |
 
-Caveat: the labels were written by the coding agent and haven't been checked by a teacher, and n=15. Treat this as a smoke test of accuracy, not proof.
+Remaining misses: all three models give `2 + 2 = 4` 2/3, not 3/3 (is an equation "reasoning"?), and Haiku gives `2/6 = 1/3` 1 point, not 0. Before the rubric was tightened, Haiku scored 73.3%. It followed the rubric as written, and the rubric didn't match the labels. That's the case for teacher review and rubric editing before approval. Caveat: n=15, so one answer is worth 6.7 points. Treat this as a smoke test, not proof.
 
 ## Deployed runs (Railway, 2026-11-05; client = M1 Mac over the internet)
 

@@ -91,7 +91,7 @@ JSON reports include per-submission accept/end-to-end latency, aggregate percent
 
 ## Accuracy eval
 
-`scripts/eval-set.json` contains three teacher-keyed questions, fixed hand-written rubrics, and 15 labeled typed answers (correct, partial, wrong, and alternative methods). The evaluator calls the real grader directly—no rubric generation or HTTP—and compares models on exact-match rate, mean absolute error, cost, and p50 latency.
+`scripts/eval-set.json` contains three teacher-keyed questions, fixed hand-written rubrics, and 15 human-checked labeled typed answers (correct, partial, wrong, and alternative methods). The evaluator calls the real grader directly—no rubric generation or HTTP—and compares models on exact-match rate, mean absolute error, cost, and p50 latency.
 
 ```sh
 LLM_MODE=real npm run eval -- \
