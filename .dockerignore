@@ -8,3 +8,5 @@ loadtest-results
 !.env.example
 *.log
 .DS_Store
+data*
+scripts/eval-set.json.bak
