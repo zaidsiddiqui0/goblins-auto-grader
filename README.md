@@ -101,7 +101,7 @@ LLM_MODE=real npm run eval -- \
   --model another/openrouter-model
 ```
 
-It refuses to run unless `LLM_MODE=real` and writes detailed JSON to `loadtest-results/`. No accuracy results are claimed until that command is run explicitly.
+It refuses to run unless `LLM_MODE=real` and writes detailed JSON to `loadtest-results/`. Latest results are in docs/LOADTEST.md.
 
 ## Deploy (Railway)
 
