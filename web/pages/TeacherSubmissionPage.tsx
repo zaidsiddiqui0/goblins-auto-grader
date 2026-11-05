@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, getTeacherToken } from "../api.ts";
+import { api, getTeacherToken, pollWithBackoff } from "../api.ts";
 import type { AssignmentDTO, SubmissionDetailDTO } from "../../shared/schema.ts";
 import { formatDate, Loading, Notice, StatusPill } from "../ui.tsx";
 
@@ -25,7 +25,7 @@ export function TeacherSubmissionPage() {
     if (!getTeacherToken(id)) {
       setError("This submission isn't available on this device.");
       setLoading(false);
-      return;
+      return null;
     }
     if (initial) setLoading(true);
     try {
@@ -33,8 +33,10 @@ export function TeacherSubmissionPage() {
       setAssignment(nextAssignment);
       applyDetail(detail);
       setError("");
+      return detail;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn’t load this submission.");
+      return null;
     } finally {
       if (initial) setLoading(false);
     }
@@ -44,8 +46,9 @@ export function TeacherSubmissionPage() {
 
   useEffect(() => {
     if (submission?.status !== "queued" && submission?.status !== "processing") return;
-    const timer = window.setInterval(() => void load(), 3000);
-    return () => window.clearInterval(timer);
+    const controller = new AbortController();
+    void pollWithBackoff(() => load(), (next) => next !== null && (next.status === "completed" || next.status === "failed"), { signal: controller.signal });
+    return () => controller.abort();
   }, [submission?.status, load]);
 
   async function retry() {

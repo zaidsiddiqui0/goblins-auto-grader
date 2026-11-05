@@ -32,6 +32,43 @@ export function rememberAssignment(assignment: { id: string; title: string }) {
   localStorage.setItem(assignmentListKey, JSON.stringify([{ id: assignment.id, title: assignment.title }, ...rest]));
 }
 
+type PollOptions = { signal?: AbortSignal; onError?: (error: unknown) => void };
+async function waitForPoll(ms: number, signal?: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (signal?.aborted) { resolve(); return; }
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+    function done() { clearTimeout(timer); signal?.removeEventListener("abort", done); resolve(); }
+  });
+  while (typeof document !== "undefined" && document.hidden && !signal?.aborted) {
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        document.removeEventListener("visibilitychange", done);
+        signal?.removeEventListener("abort", done);
+        resolve();
+      };
+      document.addEventListener("visibilitychange", done, { once: true });
+      signal?.addEventListener("abort", done, { once: true });
+    });
+  }
+}
+
+export async function pollWithBackoff<T>(load: () => Promise<T>, isTerminal: (value: T) => boolean, options: PollOptions = {}): Promise<T | null> {
+  let interval = 1500;
+  while (!options.signal?.aborted) {
+    await waitForPoll(interval * (0.8 + Math.random() * 0.4), options.signal);
+    if (options.signal?.aborted) return null;
+    try {
+      const value = await load();
+      if (isTerminal(value)) return value;
+    } catch (error) {
+      if (!options.signal?.aborted) options.onError?.(error);
+    }
+    interval = Math.min(interval * 1.5, 5000);
+  }
+  return null;
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }

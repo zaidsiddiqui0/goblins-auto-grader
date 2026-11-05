@@ -2,12 +2,12 @@
 
 ## Statement of confidence (deployed, Railway, one container)
 
-- **Ship for classroom-scale spikes.** On the deployed stack, 300 students joining at once and working through 3 questions had 900/900 graded, 0 lost, 0 duplicated, 0 stuck, and a per-answer p95 of 8.6s. A real-model run on production had 30/30 graded, p95 1.8s, $0.005.
-- **It breaks at about 1,000 simultaneous students per container.** 18 joins returned HTTP 502 from Railway's proxy, and HTTP accept p99 was 27.8s. 54 of 3000 answers were never accepted. The client saw an error each time, so nothing was silent, and every accepted answer still completed (2946/2946). The bottleneck is one Node process doing HTTP, polling, and SQLite writes. It is not the grading queue.
+- **Ship for classroom-scale spikes.** After poll backoff, 300 students joining at once and working through 3 questions had 900/900 graded, 0 lost, 0 duplicated, 0 stuck, and a per-answer p95 of 7.9s. A real-model run on production had 30/30 graded, p95 1.8s, $0.005.
+- **It still breaks at about 1,000 simultaneous students per container.** After poll backoff, only 2589/3000 answers were accepted and HTTP accept p99 was 50.1s; the recorded errors (capped at 20) were all join HTTP 502s. Every accepted answer completed (2589/2589), with 0 lost, duplicated, or stuck. Backoff did not improve the 1,000-student limit in this run: the previous run accepted 2946/3000 with accept p99 27.8s. The client sees each error, so nothing is silent.
 - **Re-run any time, for free:** `npm run loadtest -- --base https://loadtest-production-1aeb.up.railway.app --n 300 --concurrency 300 --think-ms 3000 --max-p95-s 10` (a mock-mode twin of production). Exit 0 means ship.
 
 
-`scripts/loadtest.ts` exercises the production HTTP path. It creates and approves a three-question assignment; every seeded student joins with a name and PIN, then submits each question sequentially and waits for its terminal grade. Think-time between questions defaults to 2000ms with a deterministic ±50% jitter. Bounded student concurrency and optional start staggering model a testing-day window rather than an artificial all-at-once burst.
+`scripts/loadtest.ts` exercises the production HTTP path. It creates and approves a three-question assignment; every seeded student joins with a name and PIN, then submits each question sequentially and waits for its terminal grade. Think-time between questions defaults to 2000ms with a deterministic ±50% jitter. Bounded student concurrency and optional start staggering model a testing-day window rather than an artificial all-at-once burst. Browsers and the harness share the same score polling: 1.5s initial delay, ×1.5 backoff capped at 5s, and ±20% jitter. Browser polling pauses while the document is hidden; both stop at a terminal status.
 
 The harness replays question 1 for a seeded subset of students. The natural `(student_id, question_id)` key must return the same submission. It samples `/api/metrics` every 500ms and uses the teacher report for authoritative lost, duplicated, nonterminal, and unscored checks. The JSON report includes every submission's accept and terminal latency as well as aggregate percentiles.
 
@@ -71,8 +71,10 @@ Caveat: the labels were written by the coding agent and haven't been checked by 
 | loadtest (mock, 96 workers) | 30 students × 3 q | 90/90 | 0/0/0 | 0.12s / 0.39s | 2.6s / 3.7s / 3.8s | 0 | $0 |
 | loadtest (mock, 96 workers) | 300 students × 3 q, all at once | 900/900 | 0/0/0 | 2.1s / 8.8s | 4.0s / 8.6s / 13.4s | 93 | $0 |
 | loadtest (mock, 96 workers) | 1000 students × 3 q, all at once | 2946/3000 accepted, 2946 graded | 0/0/0 | 8.1s / 27.8s | 15.2s / 23.3s / 41.5s | 746 | $0 |
+| loadtest (mock, 96 workers) | **After poll backoff:** 300 students × 3 q, all at once | 900/900 | 0/0/0 | 0.302s / 17.9s | 4.1s / 7.9s / 22.2s | 44 | $0 |
+| loadtest (mock, 96 workers) | **After poll backoff:** 1000 students × 3 q, all at once | 2589/3000 accepted, 2589 graded | 0/0/0 | 14.2s / 50.1s | 7.4s / 40.7s / 60.1s | 106 | $0 |
 | **app (real Haiku 5.5)** | 10 students × 3 q | 30/30 | 0/0/0 | – | 1.4s / 1.8s / 2.1s | 0 | **$0.0048** |
 
 The app is at https://app-production-1a4f.up.railway.app. The mock twin is at https://loadtest-production-1aeb.up.railway.app (same image; `LLM_MODE=mock`, `MOCK_LATENCY_MS=2500`).
 
-**Next fixes, in order:** (1) replace 1s polling with SSE or longer poll intervals (polling was most of the request load), (2) split the API and the workers into separate services, (3) Postgres plus a SKIP LOCKED queue so API replicas can scale horizontally. Those come before the 10k row in the scaling table.
+**Next fixes, in order:** (1) split the API and the workers into separate services, (2) add HTTP admission control/retry tuning for join bursts, (3) Postgres plus a SKIP LOCKED queue so API replicas can scale horizontally. Poll backoff is deployed and did not raise the 1,000-student ceiling. Those come before the 10k row in the scaling table.

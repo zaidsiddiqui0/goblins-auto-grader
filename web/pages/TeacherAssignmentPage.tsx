@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, getTeacherToken, rememberAssignment, saveTeacherToken } from "../api.ts";
+import { api, getTeacherToken, pollWithBackoff, rememberAssignment, saveTeacherToken } from "../api.ts";
 import type { AssignmentDTO, Rubric, SubmissionStatus, TeacherReportDTO } from "../../shared/schema.ts";
 import { ReadonlyRubric, RubricEditor } from "../RubricEditor.tsx";
 import { EmptyState, formatDate, Loading, Notice, StatusPill, Stepper } from "../ui.tsx";
@@ -47,13 +47,15 @@ export function TeacherAssignmentPage() {
   }, [id, applyAssignment]);
 
   const loadReport = useCallback(async () => {
-    if (!getTeacherToken(id)) return;
+    if (!getTeacherToken(id)) return null;
     try {
       const next = await api.getSubmissions(id);
       setReport(next);
       setReportError("");
+      return next;
     } catch (cause) {
       setReportError(cause instanceof Error ? cause.message : "Couldn’t load the class report.");
+      return null;
     }
   }, [id]);
 
@@ -62,8 +64,9 @@ export function TeacherAssignmentPage() {
   const activeSubmissions = (report?.counts.queued ?? 0) + (report?.counts.processing ?? 0);
   useEffect(() => {
     if (!activeSubmissions) return;
-    const timer = window.setInterval(() => void loadReport(), 3000);
-    return () => window.clearInterval(timer);
+    const controller = new AbortController();
+    void pollWithBackoff(loadReport, (next) => next !== null && next.counts.queued + next.counts.processing === 0, { signal: controller.signal });
+    return () => controller.abort();
   }, [activeSubmissions, loadReport]);
 
   async function generateRubric() {

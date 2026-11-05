@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AssignmentDTO, StudentProgressDTO, SubmissionDetailDTO, SubmissionStatus, SubmissionSummaryDTO, TeacherReportDTO } from "../shared/schema";
+import { pollWithBackoff } from "../web/api.ts";
 
 type Mode = "mock" | "real";
 type Options = {
@@ -185,17 +186,17 @@ async function run(options: Options): Promise<void> {
   }
   async function poll(record: Accepted, token: string): Promise<void> {
     const deadline = record.submittedAt + options.timeoutS * 1000;
-    while (Date.now() < deadline) {
-      try {
-        const detail = await jsonRequest<SubmissionDetailDTO>(`${options.base}/api/submissions/${record.id}`, { headers: { "x-student-token": token } });
-        if (detail.status === "completed" || detail.status === "failed") {
-          record.status = detail.status; record.terminalAt = Date.now(); return;
-        }
-        record.status = detail.status;
-      } catch { /* Teacher verification below is authoritative. */ }
-      await delay(Math.min(250, Math.max(0, deadline - Date.now())));
-    }
-    record.stuck = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
+    try {
+      const detail = await pollWithBackoff(async () => {
+        const next = await jsonRequest<SubmissionDetailDTO>(`${options.base}/api/submissions/${record.id}`, { headers: { "x-student-token": token } });
+        record.status = next.status;
+        return next;
+      }, (next) => next.status === "completed" || next.status === "failed", { signal: controller.signal });
+      if (detail) { record.terminalAt = Date.now(); return; }
+      record.stuck = true;
+    } finally { clearTimeout(timeout); }
   }
 
   let sampling = true;

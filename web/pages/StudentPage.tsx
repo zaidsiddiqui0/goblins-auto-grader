@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
-import { api, saveStudentToken, submitStudentWork } from "../api.ts";
+import { api, pollWithBackoff, saveStudentToken, submitStudentWork } from "../api.ts";
 import type { PublicAssignmentDTO, StudentProgressDTO, SubmissionDetailDTO } from "../../shared/schema.ts";
 import { Loading, Notice, StatusPill } from "../ui.tsx";
 import { Whiteboard, type WhiteboardHandle } from "../Whiteboard.tsx";
@@ -10,6 +10,7 @@ type Session = { studentId: string; token: string; progress: StudentProgressDTO 
 export function StudentPage() {
   const { code = "" } = useParams();
   const active = useRef(true);
+  const pollController = useRef<AbortController | null>(null);
   const boardRef = useRef<WhiteboardHandle>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [assignment, setAssignment] = useState<PublicAssignmentDTO | null>(null);
@@ -34,24 +35,27 @@ export function StudentPage() {
       .then((next) => { if (active.current) setAssignment(next); })
       .catch((cause) => { if (active.current) setLoadError(cause instanceof Error ? cause.message : "Couldn’t open this assignment."); })
       .finally(() => { if (active.current) setLoading(false); });
-    return () => { active.current = false; };
+    return () => { active.current = false; pollController.current?.abort(); };
   }, [code]);
 
   async function pollSubmission(studentId: string, submissionId: string) {
-    while (active.current) {
-      try {
-        const detail = await api.getStudentSubmission(studentId, submissionId);
-        if (!active.current) return;
-        setSubmission(detail);
-        if (detail.status === "completed" || detail.status === "failed") {
-          const nextProgress = await api.getStudentProgress(studentId);
-          if (active.current) setSession((current) => current ? { ...current, progress: nextProgress } : current);
-          return;
-        }
-      } catch (cause) {
-        if (active.current) setError(cause instanceof Error ? cause.message : "Couldn’t load your grade.");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 750));
+    pollController.current?.abort();
+    const controller = new AbortController();
+    pollController.current = controller;
+    try {
+      const detail = await pollWithBackoff(async () => {
+        const next = await api.getStudentSubmission(studentId, submissionId);
+        if (active.current && !controller.signal.aborted) setSubmission(next);
+        return next;
+      }, (next) => next.status === "completed" || next.status === "failed", {
+        signal: controller.signal,
+        onError: (cause) => { if (active.current) setError(cause instanceof Error ? cause.message : "Couldn’t load your grade."); },
+      });
+      if (!detail || !active.current || controller.signal.aborted) return;
+      const nextProgress = await api.getStudentProgress(studentId);
+      if (active.current) setSession((current) => current ? { ...current, progress: nextProgress } : current);
+    } catch (cause) {
+      if (active.current) setError(cause instanceof Error ? cause.message : "Couldn’t load your grade.");
     }
   }
 
