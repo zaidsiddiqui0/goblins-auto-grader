@@ -3,7 +3,7 @@
 Read this first in every new session. Keep it current: update **State** and **History** when you finish a step. This file is the single source of project memory, and `AGENTS.md` points here.
 
 ## Goal
-This is a take-home for Goblins: a deployable auto-grader. Teachers create an assignment, then a rubric is generated and **approved before any student work is read**. Students submit, an async worker grades the work against the locked rubric version, and teachers see a report. A repeatable load test is part of the deliverable. **Source of truth: the original brief at `docs/takehome.md`** (contact: Alp, alp@goblinsapp.com; share the repo with GitHub user Karavil). `docs/build-prompt.md` is a secondary AI-written elaboration. Plan, risks, and CTO questions: `docs/PLAN.md`. HTTP contract: `docs/API.md`. Data shapes: `shared/schema.ts`.
+This is a take-home for Goblins: a deployable auto-grader. Teachers create an assignment, then a rubric is generated and **approved before any student work is read**. Students submit, an async worker grades the work against the locked rubric version, and teachers see a report. A repeatable load test is part of the deliverable. **Source of truth: the original brief at `docs/takehome.md`** (contact: Alp, alp@goblinsapp.com; share the repo with GitHub user Karavil). `docs/build-prompt.md` is a secondary AI-written elaboration. Decisions: `DECISIONS.md`. HTTP contract: `docs/API.md`. Data shapes: `shared/schema.ts`.
 
 ## Hard rules
 1. **No bias leak.** Rubric generation receives assignment questions/answer keys only, never submissions or student names.
@@ -41,7 +41,8 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - [x] Task F: async scrypt PIN hashing/verification deployed to loadtest only. 300 students pass (900/900, E2E p95 8.284s); 1000 improve to 2967/3000 accepted/graded, with 11 residual join 502s. LOADTEST.md condensed with scaling table.
 - [x] Task G: scale tiers, decision/deferral summary, and typed-answer cost documented; app redeployed healthy (a2bfad65; `/` and `/api/metrics` return 200).
 - [ ] Invite Karavil ONLY when the user says so: `gh api -X PUT repos/zaidsiddiqui0/goblins-auto-grader/collaborators/Karavil`. gh is NOT logged in; git push works via the keychain.
-- [ ] Optional demo recording script
+- [x] Demo video recorded (by user); script/PDFs in ~/Desktop/goblins-demo/
+- [x] Deleted stale docs/PLAN.md (described the pre-per-question flow)
 
 ## History
 - Session 1 (Opus 5.5 orchestrator): found the repo empty with no Goblins APIs, so built from scratch with adapters. Chose the single-process Hono + SQLite + in-process DB queue. Wrote the plan, the contracts, and this file. Spend at start: $0.16 on the key.
@@ -60,3 +61,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Session 8 (Kimi F): replaced synchronous PIN scrypt with promisified async crypto.scrypt on the libuv pool, retained timingSafeEqual and the stored salt:hash format, and kept PIN-attempt updates transactional. Typecheck, 11 tests, build, and local n=30 passed (90/90, E2E p95 1.796s). Deployed only loadtest (fdf61baa, healthy). Deployed n=1000 improved from 2589 to 2967 accepted/graded; accept p95/p99 8.185/25.312s, E2E p50/p95/p99 17.425/25.738/42.619s, 0 lost/dup/stuck, 11 join 502s, 2 client retries. Deployed n=300 passed: 900/900, accept p95/p99 2.907/5.418s, E2E p50/p95/p99 4.306/8.284/12.574s. Condensed LOADTEST.md and linked its scaling table from README. Next 1000-join lever: rate limiting/spreading or more CPU.
 - Re-labeled q1-b 3→2 (user). Eval: Haiku 100%, Gemini 86.7%, GPT-5-mini 93.3% (n=15; the rubric was tuned on this set, so the result is optimistic).
 - Session 9 (Kimi G): ordered the scaling table by need (1k→1M), added partitioning and the $828.16 typed-answer 1M-student estimate, and summarized decisions/deferrals in README. Redeployed app a2bfad65 successfully; `/` and `/api/metrics` both returned 200. No load test or real-model grading run.
+- Session 10: wrote demo script, deleted stale docs/PLAN.md, drafted submission email (links: README, DECISIONS.md, docs/LOADTEST.md, scripts/loadtest.ts). Key usage at submission: $16.59; prod app model spend $0.018.

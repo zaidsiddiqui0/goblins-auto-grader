@@ -132,5 +132,4 @@ npx -y @railway/cli up -s app && npx -y @railway/cli domain -s app
 
 - [HTTP API](docs/API.md)
 - [Decisions](DECISIONS.md)
-- [Implementation plan and risks](docs/PLAN.md)
 - [Load-test methodology and results](docs/LOADTEST.md)
