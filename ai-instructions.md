@@ -25,7 +25,7 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Env: see `.env.example`.
 
 ## Repo
-`~/code/goblins-auto-grader`, remote `github.com/zaidsiddiqui0/goblins-auto-grader`. The original brief is also at `~/Documents/goblins-auto-grader/`.
+`~/code/goblins-auto-grader`, remote `github.com/zaidsiddiqui0/goblins-auto-grader`. The original brief is also at `~/Documents/goblins-auto-grader/`. `gh` auth lives in `GH_CONFIG_DIR=~/.gh-config` (`~/.config` is root-owned); the repo-local git credential helper uses it.
 
 ## State
 - [x] Scaffold, contracts, and docs
@@ -35,7 +35,8 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - [x] Load test, Dockerfile, README, and results (Kimi C)
 - [x] UI walkthrough in headless Chrome; screenshots in docs/screens/
 - [x] Original-brief gaps: per-question flow, whiteboard, cross-device persistence, report grid, CTAs, load test, and accuracy eval
-- [ ] Public deploy (Fly.io; needs user's account) and push to GitHub (remote has an unrelated 'first commit' in ~/Documents copy, so confirm before pushing)
+- [x] Pushed `main` to GitHub; Karavil invited (write, pending acceptance)
+- [ ] Public deploy (Fly.io; needs user's account)
 
 ## History
 - Session 1 (Opus 5.5 orchestrator): found the repo empty with no Goblins APIs, so built from scratch with adapters. Chose the single-process Hono + SQLite + in-process DB queue. Wrote the plan, the contracts, and this file. Spend at start: $0.16 on the key.
@@ -46,3 +47,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Orchestrator: the crash test found that orphaned `processing` jobs waited for lease expiry; boot now requeues all of them. Fixed the review-list numbering in the approve dialog. Local deploy: `node --env-file=.env --import tsx server/index.ts` on :3000, LLM_MODE=real, data in ./data. Browser automation: the user's Chrome has no remote debugging, so launch headless Chrome with --remote-debugging-port=9333 and its own --user-data-dir, and set BU_CDP_WS plus BH_HOME=/tmp/bh-gag (~/.config is root-owned).
 - Received the original take-home (`docs/takehome.md`). Gaps vs that brief: per-question flow, whiteboard, cross-device student/teacher return, a per-student report grid, the Goblins CTA, an accuracy eval, and a public deploy. Spec: docs/tasks/D-takehome-gaps.md (Kimi D). Cost lesson: Opus orchestrator turns are about 95% of spend, and a cache expiry after a gap of more than 5 minutes re-bills the full context (about $0.55 at 100k tokens). The Kimi workers cost about $0.30 each.
 - Session 5 (Kimi D): replaced whole-assignment submissions with PIN-joined students and natural-key per-question jobs pinned to rubric slices; added the responsive whiteboard, teacher fragment links, student summary, report grid, and Goblins CTAs. Updated load testing and added a 15-answer/3-question real-model eval (not run). Added rubric-version and inline-PDF integration coverage. Typecheck, 11 tests, build, and the required n=30 mock smoke passed: 90/90 completed, 3/3 duplicate replays matched, zero lost/duplicated/stuck, E2E p95 604ms; results in `loadtest-results/2026-11-05T07-32-43-313Z-mock-n30.json`. No git commit made.
+- Session 6: installed `gh`, logged in as zaidsiddiqui0, pushed `main` (public repo), and invited Karavil as a collaborator. Personal repos can't grant read-only access, so the invite is write.
