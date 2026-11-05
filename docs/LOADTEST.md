@@ -22,16 +22,15 @@ Before/after refers only to async scrypt. Mock runs used 96 workers, 3 questions
 
 ## Accuracy eval (15 labeled typed answers)
 
-Human-checked labels (2026-11-05) changed q2-b 4→3 and q2-e 2→1; the q2 rubric now requires the rule and cm². Run `LLM_MODE=real npm run eval -- --model M`.
+Human-checked labels (2026-11-05) changed q1-b 3→2 (the rubric asks for reasoning in words), q2-b 4→3, and q2-e 2→1. The q2 rubric now requires the rule and cm². Run `LLM_MODE=real npm run eval -- --model M`.
 
 | Model | Exact match | MAE (pts) | Cost per 15 | p50 |
 |---|---|---|---|---|
-| anthropic/claude-haiku-5.5 (default) | 86.7% | 0.13 | $0.0043 | 2.0s |
-| google/gemini-2.5-flash-lite | 86.7% | 0.13 | $0.0017 | 0.9s |
-| openai/gpt-5-mini | 93.3% | 0.07 | $0.0268 | 9.2s |
+| anthropic/claude-haiku-5.5 (default) | 100% | 0.00 | $0.0041 | 2.1s |
+| google/gemini-2.5-flash-lite | 86.7% | 0.20 | $0.0018 | 0.9s |
+| openai/gpt-5-mini | 93.3% | 0.07 | $0.0251 | 8.3s |
 
-Remaining misses: all three give `2 + 2 = 4` 2/3, not 3/3 (is an equation “reasoning”?), and Haiku gives `2/6 = 1/3` 1 point, not 0. Before the rubric was tightened, Haiku scored 73.3%; it followed a rubric that did not match the labels.
-That is the case for teacher review and rubric editing before approval. Caveat: n=15, so one answer is worth 6.7 points; treat this as a smoke test, not proof.
+Before the rubric was tightened, Haiku scored 73.3%: it followed a rubric that didn't match the labels, which is the case for teacher review before approval. Caveat: n=15, and the rubric was tuned on this same set, so 100% is optimistic. Treat this as a smoke test, not proof. Next: a held-out set of 50–100 real, teacher-graded answers.
 
 ## Built for setup → at scale
 

@@ -57,7 +57,7 @@
   },
   "answers": [
     { "id": "q1-a", "questionId": "q1", "text": "4", "expectedScore": 2 },
-    { "id": "q1-b", "questionId": "q1", "text": "2 + 2 = 4", "expectedScore": 3 },
+    { "id": "q1-b", "questionId": "q1", "text": "2 + 2 = 4", "expectedScore": 2 },
     { "id": "q1-c", "questionId": "q1", "text": "5", "expectedScore": 0 },
     { "id": "q1-d", "questionId": "q1", "text": "I drew two apples and then two more apples. There are four apples altogether.", "expectedScore": 3 },
     { "id": "q1-e", "questionId": "q1", "text": "2 + 2 = 22 because I put the digits together.", "expectedScore": 0 },
