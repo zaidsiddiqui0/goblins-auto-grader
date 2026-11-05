@@ -7,7 +7,6 @@ import { NewAssignmentPage } from "./pages/NewAssignmentPage.tsx";
 import { TeacherAssignmentPage } from "./pages/TeacherAssignmentPage.tsx";
 import { TeacherSubmissionPage } from "./pages/TeacherSubmissionPage.tsx";
 import { StudentPage } from "./pages/StudentPage.tsx";
-import { ResultPage } from "./pages/ResultPage.tsx";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -20,7 +19,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/t/:id" element={<TeacherAssignmentPage />} />
           <Route path="/t/:id/s/:sid" element={<TeacherSubmissionPage />} />
           <Route path="/s/:code" element={<StudentPage />} />
-          <Route path="/r/:sid" element={<ResultPage />} />
           <Route path="*" element={<div className="card"><h1>Page not found</h1><p>That page doesn’t exist.</p></div>} />
         </Routes>
       </Layout>

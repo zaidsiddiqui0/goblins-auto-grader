@@ -2,22 +2,22 @@
 
 Types live in `shared/schema.ts`. All JSON. Errors: `{ "error": string }` with a proper 4xx/5xx status.
 
-## Auth (no accounts)
-- **Teacher**: `POST /api/assignments` returns a random `teacherToken` once. Server stores only its SHA-256. Teacher routes require header `x-teacher-token`. Wrong/missing → 401/404 (don't leak existence).
-- **Student**: creating a submission returns a random `studentToken` once. `GET /api/submissions/:id` requires header `x-student-token` matching that submission. IDs are random (not sequential).
-- File downloads: `GET /api/files/:submissionId/:index?t=<teacherOrStudentToken>` (query param because `<img src>` can't send headers).
+## Auth and persistence
+- **Teacher**: `POST /api/assignments` returns `teacherToken` once. Store it in the private link `/t/:id#k=<token>`; fragments are never sent to the server. Teacher routes require `x-teacher-token`.
+- **Student**: join with class code, case-insensitive name, and 4-digit PIN. PINs are salted/scrypt-hashed. Five wrong attempts lock that student for 10 minutes. A successful join returns a session token and all progress; rejoining rotates the token. Student routes require `x-student-token`.
+- File downloads: `GET /api/files/:submissionId/:index?t=<teacherOrStudentToken>`.
 
 ## Teacher
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/api/extract` | multipart `file` (PDF ≤10MB) | `{ text, questions: Question[] }` — stateless, heuristic split on numbered lines; no answer keys inferred |
-| POST | `/api/assignments` | `{ title, questions: Question[] }` | `{ assignment: AssignmentDTO, teacherToken }` |
+| POST | `/api/extract` | multipart `file` (PDF ≤10MB) | `{ text, questions: Question[] }` |
+| POST | `/api/assignments` | `{ title, questions }` | `{ assignment, teacherToken }` |
 | GET | `/api/assignments/:id` | – | `AssignmentDTO` |
-| PUT | `/api/assignments/:id/questions` | `{ questions: Question[] }` | `AssignmentDTO` (409 if any submissions exist) |
-| POST | `/api/assignments/:id/rubric/generate` | – | `AssignmentDTO` (creates/replaces draft; LLM sees questions+answer keys only) |
-| PUT | `/api/assignments/:id/rubric/draft` | `{ rubric: Rubric }` | `AssignmentDTO` (creates a draft if none — used to edit after approval → next version) |
-| POST | `/api/assignments/:id/rubric/approve` | – | `AssignmentDTO` (draft → approved, immutable; becomes currentRubric) |
-| GET | `/api/assignments/:id/submissions` | – | `{ submissions: SubmissionSummaryDTO[], counts: Record<SubmissionStatus, number> }` |
+| PUT | `/api/assignments/:id/questions` | `{ questions }` | `AssignmentDTO` (409 after submissions) |
+| POST | `/api/assignments/:id/rubric/generate` | – | `AssignmentDTO`; LLM sees questions and answer keys only |
+| PUT | `/api/assignments/:id/rubric/draft` | `{ rubric }` | `AssignmentDTO`; editing an approved rubric creates a new draft version |
+| POST | `/api/assignments/:id/rubric/approve` | – | `AssignmentDTO`; approved versions are immutable |
+| GET | `/api/assignments/:id/submissions` | – | `TeacherReportDTO`: one row per joined student, per-question cells, flattened submissions, and status counts |
 | GET | `/api/assignments/:id/submissions/:sid` | – | `SubmissionDetailDTO` |
 | POST | `/api/assignments/:id/submissions/:sid/retry` | – | `SubmissionSummaryDTO` (only from `failed`) |
 | POST | `/api/assignments/:id/submissions/:sid/override` | `{ score, note? }` | `SubmissionDetailDTO` |
@@ -25,10 +25,16 @@ Types live in `shared/schema.ts`. All JSON. Errors: `{ "error": string }` with a
 ## Student
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET | `/api/public/:code` | – | `PublicAssignmentDTO` |
-| POST | `/api/public/:code/submissions` | multipart: `studentName`, `idempotencyKey` (client UUID), `answers` (JSON `Record<questionId,string>`, optional), `files` (0–5 × jpg/png/webp ≤8MB each, or 1 PDF ≤10MB). Need answers or files. | `202 { submissionId, studentToken, status }`. Same `(code, idempotencyKey)` again → `200` same submission, no new job. 409 if not accepting. |
-| GET | `/api/submissions/:id` | header `x-student-token` | `SubmissionDetailDTO` minus `override.note`; same shape |
+| GET | `/api/public/:code` | – | `PublicAssignmentDTO`; no answer keys or rubric |
+| POST | `/api/public/:code/join` | `{ name, pin }` | `{ studentToken, progress: StudentProgressDTO }` |
+| GET | `/api/students/:studentId/progress` | auth header | `StudentProgressDTO` |
+| POST | `/api/students/:studentId/submissions/:questionId` | auth header; multipart `answer` (optional string) and `file` (optional one jpg/png/webp ≤8MB); one is required | `202 { submissionId, status }` |
+| GET | `/api/submissions/:id` | auth header | `SubmissionDetailDTO` without private override note |
+
+A submission is exactly one question and pins the latest approved `rubric_version_id`. `UNIQUE(student_id, question_id)` is the idempotency key: replaying the same student/question returns `200` and the existing submission id without creating another job. Whiteboard/photo submissions use vision transcription; typed-only submissions skip the reader model.
 
 ## Ops
+| Method | Path | Returns |
+|---|---|---|
 | GET | `/api/health` | `{ ok, mode }` |
-| GET | `/api/metrics` | `{ mode, queueDepth, inFlight, peakInFlight, statusCounts, retries, llm: { calls, costUsd, budgetUsd } }` |
+| GET | `/api/metrics` | `{ mode, queueDepth, inFlight, peakInFlight, statusCounts, retries, llm }` |

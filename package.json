@@ -11,7 +11,8 @@
     "start": "NODE_ENV=production tsx --env-file-if-exists=.env server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --root .",
-    "loadtest": "tsx scripts/loadtest.ts"
+    "loadtest": "tsx scripts/loadtest.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

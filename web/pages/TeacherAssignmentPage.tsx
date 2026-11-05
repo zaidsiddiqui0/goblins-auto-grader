@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, getTeacherToken, rememberAssignment } from "../api.ts";
-import type { AssignmentDTO, Rubric, SubmissionStatus, SubmissionSummaryDTO } from "../../shared/schema.ts";
+import { Link, useParams } from "react-router-dom";
+import { api, getTeacherToken, rememberAssignment, saveTeacherToken } from "../api.ts";
+import type { AssignmentDTO, Rubric, SubmissionStatus, TeacherReportDTO } from "../../shared/schema.ts";
 import { ReadonlyRubric, RubricEditor } from "../RubricEditor.tsx";
 import { EmptyState, formatDate, Loading, Notice, StatusPill, Stepper } from "../ui.tsx";
 
-type Report = { submissions: SubmissionSummaryDTO[]; counts: Record<SubmissionStatus, number> };
+type Report = TeacherReportDTO;
 
 export function TeacherAssignmentPage() {
   const { id = "" } = useParams();
-  const navigate = useNavigate();
   const [assignment, setAssignment] = useState<AssignmentDTO | null>(null);
   const [editedRubric, setEditedRubric] = useState<Rubric | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +18,7 @@ export function TeacherAssignmentPage() {
   const [success, setSuccess] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [copyState, setCopyState] = useState("");
+  const [teacherCopyState, setTeacherCopyState] = useState("");
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState("");
 
@@ -30,6 +30,10 @@ export function TeacherAssignmentPage() {
 
   useEffect(() => {
     let active = true;
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const linkedToken = fragment.get("k");
+    if (linkedToken) saveTeacherToken(id, linkedToken);
+    if (window.location.hash) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     if (!getTeacherToken(id)) {
       setError("This assignment isn't available on this device.");
       setLoading(false);
@@ -141,6 +145,7 @@ export function TeacherAssignmentPage() {
   const draft = assignment.draftRubric;
   const editorVersion = draft?.version ?? (current?.version ?? 0) + 1;
   const shareLink = `${window.location.origin}/s/${assignment.accessCode}`;
+  const privateTeacherLink = `${window.location.origin}/t/${id}#k=${encodeURIComponent(getTeacherToken(id) ?? "")}`;
   const reviewQuestions = editedRubric?.questions.map((question, i) => ({ ...question, number: i + 1 })).filter((question) => question.needsReview) ?? [];
 
   return (
@@ -153,6 +158,16 @@ export function TeacherAssignmentPage() {
 
       {error && <Notice tone="error">{error}</Notice>}
       {success && <Notice tone="success">{success}</Notice>}
+
+      <section className="card teacher-link-panel">
+        <h2>Private teacher link</h2>
+        <p>Bookmark this to open your class on any device.</p>
+        <div className="share-link-row"><div className="field"><label htmlFor="private-teacher-link">Keep this link private</label><input id="private-teacher-link" readOnly value={privateTeacherLink} onFocus={(event) => event.target.select()} /></div><button className="button secondary" type="button" onClick={async () => {
+          try { await navigator.clipboard.writeText(privateTeacherLink); setTeacherCopyState("Copied!"); }
+          catch { setTeacherCopyState("Select the link above and copy it."); }
+        }}>Copy</button></div>
+        {teacherCopyState && <p className="muted" role="status">{teacherCopyState}</p>}
+      </section>
 
       {!current && !editedRubric && (
         <section className="card generate-panel">
@@ -203,26 +218,33 @@ export function TeacherAssignmentPage() {
         )}
         {reportError && <Notice tone="error">{reportError}</Notice>}
         {!report && !reportError && <Loading>Loading submissions…</Loading>}
-        {report && report.submissions.length === 0 && <EmptyState title="No submissions yet">Share code {assignment.accessCode} with your class.</EmptyState>}
-        {report && report.submissions.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Student</th><th>Status</th><th>Score / max</th><th>Review</th><th>Rubric</th><th>Submitted</th><th><span className="sr-only">Open</span></th></tr></thead>
-              <tbody>{report.submissions.map((submission) => (
-                <tr key={submission.id} onClick={() => navigate(`/t/${id}/s/${submission.id}`)} onKeyDown={(event) => { if (event.key === "Enter") navigate(`/t/${id}/s/${submission.id}`); }} tabIndex={0} className="clickable-row">
-                  <td><strong>{submission.studentName}</strong></td>
-                  <td><StatusPill status={submission.status} /></td>
-                  <td>{submission.score === null ? "—" : `${submission.score} / ${submission.maxScore ?? "—"}`}</td>
-                  <td>{submission.needsReview ? <span className="badge badge-check">Needs review</span> : "—"}</td>
-                  <td>v{submission.rubricVersion}</td>
-                  <td>{formatDate(submission.createdAt)}</td>
-                  <td><Link to={`/t/${id}/s/${submission.id}`} aria-label={`View ${submission.studentName}'s submission`}>View →</Link></td>
+        {report && report.students.length === 0 && <EmptyState title="No students yet">Share code {assignment.accessCode} with your class. Joined students will appear here.</EmptyState>}
+        {report && report.students.length > 0 && (
+          <div className="table-wrap report-grid-wrap">
+            <table className="report-grid">
+              <thead><tr><th>Student</th><th>Progress</th><th>Total score</th>{assignment.questions.map((question, index) => <th key={question.id} title={question.prompt}>Q{index + 1}</th>)}</tr></thead>
+              <tbody>{report.students.map((student) => (
+                <tr key={student.studentId}>
+                  <td><strong>{student.studentName}</strong></td>
+                  <td>{student.answered}/{assignment.questions.length} answered</td>
+                  <td><strong>{student.totalScore} / {student.maxScore}</strong></td>
+                  {assignment.questions.map((question, index) => {
+                    const cell = student.questions[question.id];
+                    return <td key={question.id} className="report-cell">{cell ? <Link to={`/t/${id}/s/${cell.id}`} aria-label={`Open ${student.studentName}, question ${index + 1}`}>
+                      <strong>{cell.score === null ? "—" : `${cell.score} / ${cell.maxScore ?? "—"}`}</strong><StatusPill status={cell.status} />
+                      {cell.needsReview && <span className="badge badge-check">Review</span>}
+                    </Link> : <span className="badge">Not answered</span>}</td>;
+                  })}
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
       </section>
+
+      <aside className="card growth-cta">
+        <p>Want live feedback and analytics for your students? <a href="https://goblinsapp.com" target="_blank" rel="noreferrer">Assign this in Goblins →</a></p>
+      </aside>
 
       {confirming && editedRubric && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setConfirming(false); }}>

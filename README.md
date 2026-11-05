@@ -1,28 +1,30 @@
 # Goblins Auto-Grader
 
-A small, deployable auto-grader for K-12 assignments. A teacher locks a rubric before students submit; an asynchronous worker grades typed answers or photos and returns scores and feedback.
+A small, deployable auto-grader for K-12 assignments. A teacher locks a rubric before students join; students show their work one question at a time on a whiteboard, by typing, or with a photo.
 
 ## Flow
 
 1. A teacher pastes questions and answer keys, or uploads a worksheet PDF.
-2. The server generates a draft rubric from assignment content only.
-3. The teacher edits and approves the rubric, locking that version.
-4. Students use an access code to submit typed answers and/or files.
-5. The worker transcribes and grades against the approved rubric; code validates awards and computes totals.
-6. Students see their result, and teachers inspect, retry, or override grades.
+2. The server generates a draft rubric from assignment content only. The teacher edits and approves it, locking that version.
+3. The teacher shares the class code and bookmarks the private teacher link. The link restores the class on another device.
+4. Each student joins with the class code, name, and a 4-digit PIN they choose. The same details restore progress on another device.
+5. For each question, the student draws on the responsive whiteboard (pen, eraser, undo, clear, three colours), optionally types, or uploads a photo instead.
+6. The student submits that question and waits for its score and feedback before continuing. Whiteboard PNGs are capped at 1000px on the long side. Photos and whiteboards use vision; typed-only answers skip the reader model.
+7. The worker grades against the pinned one-question rubric slice. Code validates criterion awards and computes scores.
+8. The student finishes with a score summary. The teacher gets a per-student question grid and can open, retry, or override any grade.
+
+Approved rubrics are immutable: editing one creates a new draft version, and existing grades keep their original version. Rubric generation never receives student names or work. Uploaded content is delimited and treated as data, not instructions.
 
 ## Architecture
 
 ```text
-React SPA ──HTTP──> Hono API ──> SQLite (data + durable jobs)
+React SPA ──HTTP──> Hono API ──> SQLite (data + durable per-question jobs)
                         │               │
                         │               └──> in-process worker
-                        │                     ├── typed/PDF reader
-                        │                     └── vision reader + grader
+                        │                     ├── typed reader (no model call)
+                        │                     └── vision reader + one-question grader
                         └──> local uploads (/data/uploads)
 ```
-
-**Bias prevention:** rubric generation receives only questions and teacher answer keys—never submissions, student names, or student work. Uploaded content is delimited and treated as data, not instructions.
 
 ## Local setup
 
@@ -48,8 +50,8 @@ npm start
 | `LLM_MODE` | `mock` | `mock` for deterministic free grading; `real` for OpenRouter |
 | `OPENROUTER_API_KEY` | empty | Server-side OpenRouter key, required in real mode |
 | `RUBRIC_MODEL` | `anthropic/claude-haiku-5.5` | Rubric-generation model |
-| `READER_MODEL` | `anthropic/claude-haiku-5.5` | Photo-transcription model |
-| `GRADER_MODEL` | `anthropic/claude-haiku-5.5` | Grading model |
+| `READER_MODEL` | `anthropic/claude-haiku-5.5` | Whiteboard/photo transcription model |
+| `GRADER_MODEL` | `anthropic/claude-haiku-5.5` | One-question grading model |
 | `LLM_BUDGET_USD` | `2` | Hard runtime model-spend cap |
 | `LLM_TIMEOUT_MS` | `45000` | Timeout for each model call |
 | `WORKER_CONCURRENCY` | `8` | Maximum concurrent grading jobs |
@@ -68,6 +70,34 @@ npm start
 | `npm test` | Run server tests |
 | `npm run typecheck` | Typecheck server, web, shared code, and scripts |
 | `npm run loadtest -- --help` | Show load-test options |
+| `npm run eval -- --help` | Show accuracy-eval options |
+
+## Load test
+
+The harness uses the real HTTP API. Every simulated student joins, then submits three questions sequentially and waits for each grade. Seeded think-time between questions defaults to 2000ms ±50%; student concurrency creates a realistic testing-day window. It also replays selected `(student, question)` submissions and verifies lost, duplicated, stuck, and missing-score counts.
+
+```sh
+npm run loadtest -- --n 5
+npm run loadtest -- --n 30 --concurrency 10
+npm run loadtest -- --n 300 --concurrency 50 --burst-ms 1000 --think-ms 3000
+npm run loadtest -- --n 30 --max-p95-s 60
+# Only against an explicitly real-mode server; capped at 10 students:
+npm run loadtest -- --real --n 3 --max-p95-s 60
+```
+
+JSON reports include per-submission accept/end-to-end latency, aggregate percentiles, throughput, queue peaks, retries, integrity checks, and LLM cost delta. See [load-test methodology](docs/LOADTEST.md).
+
+## Accuracy eval
+
+`scripts/eval-set.json` contains three teacher-keyed questions, fixed hand-written rubrics, and 15 labeled typed answers (correct, partial, wrong, and alternative methods). The evaluator calls the real grader directly—no rubric generation or HTTP—and compares models on exact-match rate, mean absolute error, cost, and p50 latency.
+
+```sh
+LLM_MODE=real npm run eval -- \
+  --model anthropic/claude-haiku-5.5 \
+  --model another/openrouter-model
+```
+
+It refuses to run unless `LLM_MODE=real` and writes detailed JSON to `loadtest-results/`. No accuracy results are claimed until that command is run explicitly.
 
 ## Deploy to Fly.io
 
@@ -81,25 +111,9 @@ fly secrets set LLM_MODE=real OPENROUTER_API_KEY='your-key' LLM_BUDGET_USD=2
 fly deploy
 ```
 
-## Load test
-
-The harness uses the real HTTP API, creates and approves an assignment, sends seeded typed submissions and idempotency replays, polls to terminal states, and verifies the teacher's submission list.
-
-```sh
-npm run loadtest -- --n 5
-npm run loadtest -- --n 30 --concurrency 10
-npm run loadtest -- --n 300 --concurrency 50 --burst-ms 1000
-npm run loadtest -- --n 30 --max-p95-s 60
-# Only against an explicitly real-mode server; capped at 10 submissions:
-npm run loadtest -- --real --n 3 --max-p95-s 60
-```
-
-JSON results include latency percentiles, throughput, queue peaks, retries, integrity checks, and LLM cost delta. See [measured results](docs/LOADTEST.md).
-
-A real-model smoke run on Haiku 5.5 measured rubric generation at 11s/$0.0012, photo reading at 2.6s/$0.0003, and grading at about 4.4s/$0.0007: about $0.001 per graded photo submission. Handwriting was read correctly.
-
 ## More documentation
 
+- [HTTP API](docs/API.md)
 - [Decisions](DECISIONS.md)
 - [Implementation plan and risks](docs/PLAN.md)
 - [Load-test methodology and results](docs/LOADTEST.md)

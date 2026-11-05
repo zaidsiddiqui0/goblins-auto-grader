@@ -93,7 +93,7 @@ export function NewAssignmentPage() {
       const result = await api.createAssignment(title.trim(), cleaned);
       saveTeacherToken(result.assignment.id, result.teacherToken);
       rememberAssignment(result.assignment);
-      navigate(`/t/${result.assignment.id}`);
+      navigate(`/t/${result.assignment.id}#k=${encodeURIComponent(result.teacherToken)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn’t save the assignment.");
       setBusy(null);

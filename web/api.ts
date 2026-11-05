@@ -3,99 +3,62 @@ import type {
   PublicAssignmentDTO,
   Question,
   Rubric,
+  StudentProgressDTO,
   SubmissionDetailDTO,
   SubmissionStatus,
   SubmissionSummaryDTO,
+  TeacherReportDTO,
 } from "../shared/schema.ts";
 
 const teacherKey = (id: string) => `goblins.teacher.${id}`;
 const studentKey = (id: string) => `goblins.student.${id}`;
 const assignmentListKey = "goblins.assignments";
-
 export type LocalAssignment = { id: string; title: string };
 
-export function saveTeacherToken(id: string, token: string) {
-  localStorage.setItem(teacherKey(id), token);
-}
-
-export function getTeacherToken(id: string) {
-  return localStorage.getItem(teacherKey(id));
-}
-
-export function saveStudentToken(id: string, token: string) {
-  localStorage.setItem(studentKey(id), token);
-}
-
-export function getStudentToken(id: string) {
-  return localStorage.getItem(studentKey(id));
-}
+export function saveTeacherToken(id: string, token: string) { localStorage.setItem(teacherKey(id), token); }
+export function getTeacherToken(id: string) { return localStorage.getItem(teacherKey(id)); }
+export function saveStudentToken(id: string, token: string) { localStorage.setItem(studentKey(id), token); }
+export function getStudentToken(id: string) { return localStorage.getItem(studentKey(id)); }
 
 export function getLocalAssignments(): LocalAssignment[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(assignmentListKey) ?? "[]");
     if (!Array.isArray(value)) return [];
-    return value.filter(
-      (item): item is LocalAssignment =>
-        typeof item === "object" && item !== null &&
-        typeof (item as LocalAssignment).id === "string" &&
-        typeof (item as LocalAssignment).title === "string",
-    );
-  } catch {
-    return [];
-  }
+    return value.filter((item): item is LocalAssignment => typeof item === "object" && item !== null && typeof (item as LocalAssignment).id === "string" && typeof (item as LocalAssignment).title === "string");
+  } catch { return []; }
 }
-
 export function rememberAssignment(assignment: { id: string; title: string }) {
   const rest = getLocalAssignments().filter((item) => item.id !== assignment.id);
   localStorage.setItem(assignmentListKey, JSON.stringify([{ id: assignment.id, title: assignment.title }, ...rest]));
 }
 
 export class ApiError extends Error {
-  status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
+  constructor(message: string, readonly status: number) { super(message); }
 }
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
   let response: Response;
-  try {
-    response = await fetch(path, { ...init, headers });
-  } catch {
-    throw new ApiError("Network error. Check your connection and try again.", 0);
-  }
-  const body = (await response.json().catch(() => null)) as { error?: string } | null;
+  try { response = await fetch(path, init); }
+  catch { throw new ApiError("Network error. Check your connection and try again.", 0); }
+  const body = await response.json().catch(() => null) as { error?: string } | null;
   if (!response.ok) throw new ApiError(body?.error ?? `Request failed (${response.status}).`, response.status);
   return body as T;
 }
-
 function json(method: string, body?: unknown): RequestInit {
-  return {
-    method,
-    headers: { "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  };
+  return { method, headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
 }
-
-// Keep auth headers explicit rather than inferring anything from token contents.
-function asTeacher(id: string, path: string, init?: RequestInit) {
+function teacherCall<T>(id: string, path: string, init?: RequestInit): Promise<T> {
   const token = getTeacherToken(id);
-  if (!token) throw new ApiError("This assignment isn't available on this device.", 401);
+  if (!token) return Promise.reject(new ApiError("This assignment isn't available on this device.", 401));
   const headers = new Headers(init?.headers);
   headers.set("x-teacher-token", token);
-  return { path, init: { ...init, headers } };
+  return request<T>(path, { ...init, headers });
 }
-
-function teacherCall<T>(id: string, path: string, init?: RequestInit): Promise<T> {
-  try {
-    const args = asTeacher(id, path, init);
-    return request<T>(args.path, args.init);
-  } catch (error) {
-    return Promise.reject(error);
-  }
+function studentCall<T>(studentId: string, path: string, init?: RequestInit): Promise<T> {
+  const token = getStudentToken(studentId);
+  if (!token) return Promise.reject(new ApiError("Join with your name and PIN first.", 401));
+  const headers = new Headers(init?.headers);
+  headers.set("x-student-token", token);
+  return request<T>(path, { ...init, headers });
 }
 
 export const api = {
@@ -103,88 +66,53 @@ export const api = {
     return request<{ assignment: AssignmentDTO; teacherToken: string }>("/api/assignments", json("POST", { title, questions }));
   },
   extract(file: File) {
-    const form = new FormData();
-    form.append("file", file);
+    const form = new FormData(); form.append("file", file);
     return request<{ text: string; questions: Question[] }>("/api/extract", { method: "POST", body: form });
   },
-  getAssignment(id: string) {
-    return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}`);
-  },
-  generateRubric(id: string) {
-    return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/generate`, json("POST"));
-  },
-  saveRubric(id: string, rubric: Rubric) {
-    return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/draft`, json("PUT", { rubric }));
-  },
-  approveRubric(id: string) {
-    return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/approve`, json("POST"));
-  },
-  getSubmissions(id: string) {
-    return teacherCall<{ submissions: SubmissionSummaryDTO[]; counts: Record<SubmissionStatus, number> }>(
-      id,
-      `/api/assignments/${id}/submissions`,
-    );
-  },
-  getTeacherSubmission(id: string, sid: string) {
-    return teacherCall<SubmissionDetailDTO>(id, `/api/assignments/${id}/submissions/${sid}`);
-  },
-  retrySubmission(id: string, sid: string) {
-    return teacherCall<SubmissionSummaryDTO>(id, `/api/assignments/${id}/submissions/${sid}/retry`, json("POST"));
-  },
+  getAssignment(id: string) { return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}`); },
+  generateRubric(id: string) { return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/generate`, json("POST")); },
+  saveRubric(id: string, rubric: Rubric) { return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/draft`, json("PUT", { rubric })); },
+  approveRubric(id: string) { return teacherCall<AssignmentDTO>(id, `/api/assignments/${id}/rubric/approve`, json("POST")); },
+  getSubmissions(id: string) { return teacherCall<TeacherReportDTO>(id, `/api/assignments/${id}/submissions`); },
+  getTeacherSubmission(id: string, sid: string) { return teacherCall<SubmissionDetailDTO>(id, `/api/assignments/${id}/submissions/${sid}`); },
+  retrySubmission(id: string, sid: string) { return teacherCall<SubmissionSummaryDTO>(id, `/api/assignments/${id}/submissions/${sid}/retry`, json("POST")); },
   overrideScore(id: string, sid: string, score: number, note: string) {
     return teacherCall<SubmissionDetailDTO>(id, `/api/assignments/${id}/submissions/${sid}/override`, json("POST", { score, note }));
   },
-  getPublicAssignment(code: string) {
-    return request<PublicAssignmentDTO>(`/api/public/${encodeURIComponent(code)}`);
+  getPublicAssignment(code: string) { return request<PublicAssignmentDTO>(`/api/public/${encodeURIComponent(code)}`); },
+  joinStudent(code: string, name: string, pin: string) {
+    return request<{ studentToken: string; progress: StudentProgressDTO }>(`/api/public/${encodeURIComponent(code)}/join`, json("POST", { name, pin }));
   },
-  getStudentSubmission(sid: string) {
-    const token = getStudentToken(sid);
-    if (!token) return Promise.reject(new ApiError("This result isn't available on this device.", 401));
-    const headers = new Headers({ "x-student-token": token });
-    return request<SubmissionDetailDTO>(`/api/submissions/${sid}`, { headers });
-  },
+  getStudentProgress(studentId: string) { return studentCall<StudentProgressDTO>(studentId, `/api/students/${studentId}/progress`); },
+  getStudentSubmission(studentId: string, sid: string) { return studentCall<SubmissionDetailDTO>(studentId, `/api/submissions/${sid}`); },
 };
 
-type CreatedSubmission = { submissionId: string; studentToken: string; status: SubmissionStatus };
-type SubmissionResponse = Partial<CreatedSubmission> & { error?: string };
-
+type CreatedSubmission = { submissionId: string; status: SubmissionStatus };
 export function submitStudentWork(
-  code: string,
-  data: { studentName: string; idempotencyKey: string; answers: Record<string, string>; files: File[] },
+  studentId: string,
+  questionId: string,
+  data: { answer: string; file: File | null },
   onProgress: (percent: number) => void,
 ): Promise<CreatedSubmission> {
   return new Promise((resolve, reject) => {
+    const token = getStudentToken(studentId);
+    if (!token) { reject(new ApiError("Join with your name and PIN first.", 401)); return; }
     const form = new FormData();
-    form.append("studentName", data.studentName);
-    form.append("idempotencyKey", data.idempotencyKey);
-    form.append("answers", JSON.stringify(data.answers));
-    data.files.forEach((file) => form.append("files", file));
-
+    form.append("answer", data.answer);
+    if (data.file) form.append("file", data.file);
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `/api/public/${encodeURIComponent(code)}/submissions`);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onerror = () => reject(new ApiError("Network error. Your answers are still here—try submitting again.", 0));
+    xhr.open("POST", `/api/students/${encodeURIComponent(studentId)}/submissions/${encodeURIComponent(questionId)}`);
+    xhr.setRequestHeader("x-student-token", token);
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100)); };
+    xhr.onerror = () => reject(new ApiError("Network error. Your answer is still here—try submitting again.", 0));
     xhr.onabort = () => reject(new ApiError("Upload cancelled. Try again.", 0));
     xhr.onload = () => {
-      let body: SubmissionResponse | null = null;
-      try {
-        body = JSON.parse(xhr.responseText || "null") as SubmissionResponse | null;
-      } catch {
-        reject(new ApiError("The server returned an invalid response. Try again.", xhr.status));
-        return;
-      }
-      if (xhr.status < 200 || xhr.status >= 300) {
-        const message = xhr.status === 409
-          ? "This assignment isn’t accepting submissions yet."
-          : body?.error ?? `Submission failed (${xhr.status}).`;
-        reject(new ApiError(message, xhr.status));
-      } else if (!body?.submissionId || !body.studentToken || !body.status) {
-        reject(new ApiError("The server returned an incomplete response. Try again.", xhr.status));
-      } else {
-        resolve({ submissionId: body.submissionId, studentToken: body.studentToken, status: body.status });
-      }
+      let body: (Partial<CreatedSubmission> & { error?: string }) | null = null;
+      try { body = JSON.parse(xhr.responseText || "null") as (Partial<CreatedSubmission> & { error?: string }) | null; }
+      catch { reject(new ApiError("The server returned an invalid response. Try again.", xhr.status)); return; }
+      if (xhr.status < 200 || xhr.status >= 300) reject(new ApiError(body?.error ?? `Submission failed (${xhr.status}).`, xhr.status));
+      else if (!body?.submissionId || !body.status) reject(new ApiError("The server returned an incomplete response. Try again.", xhr.status));
+      else resolve({ submissionId: body.submissionId, status: body.status });
     };
     xhr.send(form);
   });

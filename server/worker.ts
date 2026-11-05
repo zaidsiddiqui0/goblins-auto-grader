@@ -92,12 +92,15 @@ export class Worker {
       const rubricRow = db.prepare("SELECT * FROM rubric_versions WHERE id=? AND status='approved'").get(submission.rubric_version_id) as { rubric_json: string } | undefined;
       if (!assignment || !rubricRow) throw new Error("Submission assignment or approved rubric is missing");
       const questions = JSON.parse(assignment.questions_json) as Question[];
-      const rubric = JSON.parse(rubricRow.rubric_json) as Rubric;
-      const typedAnswers = submission.typed_answers_json ? JSON.parse(submission.typed_answers_json) as Record<string, string> : null;
+      const fullRubric = JSON.parse(rubricRow.rubric_json) as Rubric;
+      const question = questions.find((item) => item.id === submission.question_id);
+      const rubricQuestion = fullRubric.questions.find((item) => item.questionId === submission.question_id);
+      if (!question || !rubricQuestion) throw new Error("Submission question or rubric entry is missing");
+      const rubric: Rubric = { questions: [rubricQuestion] };
       const files = JSON.parse(submission.files_json) as StoredFile[];
       const context = { submissionId: submission.id, attempt: submission.attempts };
 
-      const transcription = await this.reader.read(questions, typedAnswers, files, context);
+      const transcription = await this.reader.read(question, submission.typed_answer, files, context);
       const output = await this.grader.grade(rubric, transcription, context);
       const result = scoreGrade(rubric, output, transcription);
       const gradedAt = now();

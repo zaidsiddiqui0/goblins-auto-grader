@@ -116,10 +116,8 @@ export function TeacherSubmissionPage() {
         <h2>Submitted work</h2>
         <div className="work-grid">
           <div className="card">
-            <h3>Typed answers</h3>
-            {submission.typedAnswers && Object.keys(submission.typedAnswers).length > 0 ? Object.entries(submission.typedAnswers).map(([questionId, answer]) => (
-              <div className="answer-block" key={questionId}><h4>{promptFor(questionId)}</h4><p className="preserve-lines">{answer || "No typed answer."}</p></div>
-            )) : <p className="muted">No typed answers.</p>}
+            <h3>Typed answer</h3>
+            {submission.typedAnswer !== null ? <div className="answer-block"><h4>{promptFor(submission.questionId)}</h4><p className="preserve-lines">{submission.typedAnswer || "No typed answer."}</p></div> : <p className="muted">No typed answer.</p>}
           </div>
           <div className="card">
             <h3>Uploaded files</h3>
