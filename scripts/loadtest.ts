@@ -99,8 +99,17 @@ function makeStudents(options: Options): Student[] {
     };
   });
 }
+let networkRetries = 0;
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  // Real clients retry transient network errors (e.g. a poll hitting a reset socket); so do we, and count them.
+  let response: Response | undefined;
+  for (let attempt = 0; ; attempt += 1) {
+    try { response = await fetch(url, init); break; } catch (error) {
+      const code = (error as { cause?: { code?: string } }).cause?.code ?? "unknown";
+      if (attempt >= 3) throw new Error(`${init?.method ?? "GET"} network error ${code}`);
+      networkRetries += 1; await new Promise((r) => setTimeout(r, 200 * 2 ** attempt));
+    }
+  }
   const text = await response.text();
   let body: unknown;
   try { body = text ? JSON.parse(text) : {}; } catch { body = { error: text || "Invalid JSON response" }; }
@@ -234,7 +243,7 @@ async function run(options: Options): Promise<void> {
           }
           if (questionIndex < questions.length - 1) await delay(options.thinkMs * student.thinkScales[questionIndex]!);
         }
-      } catch (error) { if (errors.length < 20) errors.push(error instanceof Error ? error.message : String(error)); }
+      } catch (error) { if (errors.length < 20) errors.push(error instanceof Error ? `${error.message} ${(error as { cause?: { code?: string } }).cause?.code ?? ""}` : String(error)); }
     }
   }
 
@@ -267,7 +276,7 @@ async function run(options: Options): Promise<void> {
     timestamp, gitSha: gitSha(), mode: health.mode, parameters: options, assignmentId,
     students: options.n, questionsPerStudent: questions.length, offered: expected, accepted: acceptedIds.size,
     dupReplays, dupMismatches, completed, failed, stuck: stuckIds.size, lost, duplicated, missingScores,
-    http429, clientRetries, serverRetries: finalMetrics.retries - baseline.retries,
+    http429, clientRetries: clientRetries + networkRetries, serverRetries: finalMetrics.retries - baseline.retries,
     throughputCompletedPerS: durationS > 0 ? Math.round(completed / durationS * 1000) / 1000 : 0,
     submitAcceptMs, submitToTerminalMs,
     perSubmission: accepted.map((record) => ({

@@ -33,3 +33,26 @@ All integrity checks passed. Throughput includes student think-time; per-submiss
 | 10k | Postgres with `FOR UPDATE SKIP LOCKED` job claims. Put uploads in object storage. Separate API and worker processes. Alert on queue age, failure rate, and spend. |
 | 100k | Horizontal workers behind a managed queue with DLQ. Add provider-aware rate limiting and a CDN for uploads. |
 | 1M | Partition by school or district, use multi-provider failover, and choose cheap text/vision routing from the labeled accuracy eval. |
+
+## v2: per-question flow with a testing-day spike (current API)
+
+300 students join at once. Each works through 3 questions, with seeded think-time of 3s ±50% between questions. Mock grader latency is set to 2.5s (worse than real Haiku's p50 of 2.2s for one question). 10% of answers are resubmitted as duplicates. Local M1, fresh SQLite, seed 7.
+
+| Workers | Graded | Lost / dup / stuck | Throughput | Time per answer p50 / p95 / p99 | Peak queue |
+|---|---|---|---|---|---|
+| 16 | 900/900 | 0 / 0 / 0 | 6.4/s | 41.4s / 43.4s / 43.9s | 270 |
+| 96 | 900/900 | 0 / 0 / 0 | 27.6/s | 4.1s / 6.5s / 10.1s | 90 |
+
+**Where it slows down:** worker slots. Each slot holds one model call, so throughput ≈ slots ÷ latency. With too few slots, the queue grows and students wait about 40s per score. It never broke: nothing was lost, duplicated, or stuck. The first harness version dropped students on transient client `fetch` errors. The harness now retries them like a real browser would (3–4 retries per run) and counts them.
+
+**Ship/no-ship rule:** ship if `npm run loadtest` exits 0 and the per-answer p95 ≤ 10s at the expected class burst, using `--max-p95-s 10`.
+
+## Accuracy eval (real models, `scripts/eval.ts`, 15 labeled typed answers)
+
+| Model | Exact match | MAE (pts) | Cost per 15 | p50 |
+|---|---|---|---|---|
+| anthropic/claude-haiku-5.5 (default) | 93.3% | 0.07 | $0.0043 | 2.2s |
+| google/gemini-2.5-flash-lite | 80.0% | 0.20 | $0.0016 | 0.8s |
+| openai/gpt-5-mini | 86.7% | 0.13 | $0.0248 | 7.8s |
+
+Caveat: the labels were written by the coding agent and haven't been checked by a teacher, and n=15. Treat this as a smoke test of accuracy, not proof.
