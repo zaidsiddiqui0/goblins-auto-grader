@@ -28,6 +28,17 @@ React SPA ──HTTP──> Hono API ──> SQLite (data + durable per-question
                         └──> local uploads (/data/uploads)
 ```
 
+## Decisions and deferrals
+
+- Rubrics are approved before student work is read; immutable versions prevent bias and silent regrading.
+- Per-question flow, a whiteboard, and PIN rejoin give fast feedback, natural work capture, and cross-device progress.
+- Mock mode is the default so deterministic load tests are free and need no provider capacity.
+- One Node process, SQLite, and a DB-backed queue minimize operations while retaining durable retries.
+- Effect is confined to the model pipeline for typed timeout, retry, and budget handling without app-wide abstraction.
+- Haiku was chosen by the labeled eval: 100% exact match at $0.0041 for 15 answers, with the small tuned-set caveat documented.
+- Email auth and LMS sync are deferred to keep scope on grading; PINs and private teacher links cover return access.
+- Postgres, SSE, and off-site backups are deferred until scale or recovery needs justify more services; the migration path is documented.
+
 ## Local setup
 
 Requires Node 22.13+.

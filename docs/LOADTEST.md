@@ -34,14 +34,17 @@ Before the rubric was tightened, Haiku scored 73.3%: it followed a rubric that d
 
 ## Built for setup → at scale
 
-| Area | Built for setup | At scale | Limit removed |
-|---|---|---|---|
-| Database | SQLite on one volume | Postgres with `SKIP LOCKED` claims | Single-writer, single-volume database ceiling |
-| Queue | DB table, in-process worker | Separate worker service, then managed queue + DLQ | In-process worker capacity; isolated retries and poison-job handling |
-| Server | One Node process | Split API/workers, then replicas behind a load balancer | Single-process CPU and single-node HTTP ceiling |
-| Uploads | Local disk | Object storage + CDN | Local disk capacity and app bandwidth |
-| Score updates | Polling with backoff | SSE | Poll request volume and update latency |
-| PIN check | Async scrypt | Auth service + join rate limits | API CPU saturation, join bursts, and PIN abuse |
-| Model calls | One provider, fixed workers | Per-provider rate limits, failover, cheap model per answer type | Provider quotas/outages and unnecessary model cost |
-| Backups | Railway volume | Continuous off-site replication / managed Postgres | Single-volume loss and slow recovery |
-| Monitoring | `/api/metrics` | Alerts on queue age, failure rate, spend | Silent backlogs, failures, and overspend |
+| Area | Needed at | Built for setup | At scale | Limit removed |
+|---|---|---|---|---|
+| Score updates | 1k | Polling with backoff | SSE | Poll request volume and update latency |
+| PIN/join | 1k | Async scrypt | Auth service + join rate limits | API CPU saturation, join bursts, and PIN abuse |
+| Server | 10k | One Node process | Split API/workers, then replicas behind a load balancer | Single-process CPU and single-node HTTP ceiling |
+| Database | 10k | SQLite on one volume | Postgres with `SKIP LOCKED` claims | Single-writer, single-volume database ceiling |
+| Queue | 10k–100k | DB table, in-process worker | Separate worker service, then managed queue + DLQ | In-process worker capacity; isolated retries and poison-job handling |
+| Uploads | 10k–100k | Local disk | Object storage + CDN | Local disk capacity and app bandwidth |
+| Monitoring | 10k–100k | `/api/metrics` | Alerts on queue age, failure rate, spend | Silent backlogs, failures, and overspend |
+| Backups | 10k–100k | Railway volume | Continuous off-site replication / managed Postgres | Single-volume loss and slow recovery |
+| Model calls | 100k–1M | One provider, fixed workers | Per-provider rate limits, failover, cheap model per answer type | Provider quotas/outages and unnecessary model cost |
+| Partitioning | 100k–1M | One shared database | Partition by school/district | Database size and tenant blast radius |
+
+Cost at scale (typed answers only): `$0.0041408 / 15 = $0.000276053` per answer; `× 3 questions × 1,000,000 students = $828.16`. Photo/vision answers cost more and were not measured.
