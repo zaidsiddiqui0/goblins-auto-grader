@@ -62,3 +62,4 @@ This is a take-home for Goblins: a deployable auto-grader. Teachers create an as
 - Re-labeled q1-b 3→2 (user). Eval: Haiku 100%, Gemini 86.7%, GPT-5-mini 93.3% (n=15; the rubric was tuned on this set, so the result is optimistic).
 - Session 9 (Kimi G): ordered the scaling table by need (1k→1M), added partitioning and the $828.16 typed-answer 1M-student estimate, and summarized decisions/deferrals in README. Redeployed app a2bfad65 successfully; `/` and `/api/metrics` both returned 200. No load test or real-model grading run.
 - Session 10: wrote demo script, deleted stale docs/PLAN.md, drafted submission email (links: README, DECISIONS.md, docs/LOADTEST.md, scripts/loadtest.ts). Key usage at submission: $16.59; prod app model spend $0.018.
+- Session 11: added the video walkthrough link (Google Drive) to the top of the README.

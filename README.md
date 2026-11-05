@@ -1,5 +1,7 @@
 **Live app:** https://app-production-1a4f.up.railway.app
 
+**Video walkthrough:** https://drive.google.com/file/d/1M2hnu1JZhXz2HzgzVFGtG7JEy9WMeZi0/view?usp=sharing
+
 # Goblins Auto-Grader
 
 A small, deployable auto-grader for K-12 assignments. A teacher locks a rubric before students join; students show their work one question at a time on a whiteboard, by typing, or with a photo.
